@@ -1,5 +1,6 @@
 import db from '../dist/db/models/index.js';
 import bcrypt from 'bcrypt';
+import { Op } from 'sequelize';
 
 const createUser = async (req) => {
     const {
@@ -102,9 +103,126 @@ const deleteUser = async (id) => {
     };
 }
 
+const getAllUsers = async () => {
+
+    const user = await db.User.findAll({
+        where: {
+            status: true,
+        }
+    });
+
+    return {
+        code: 200,
+        message: user,
+    };
+}
+
+const findUsers = async (req, res) => {
+    console.log('Params received:', req.query);
+
+    const { eliminado, nombre, inicioAntes, inicioDespues } = req.query;
+    const whereClause = {};
+
+    if (eliminado !== undefined) {
+        whereClause.status = eliminado === 'true';
+    }
+    if (nombre) {
+        whereClause.name = {
+            [Op.like]: `%${nombre}%`
+        };
+    }
+    
+    if (inicioAntes && inicioDespues) {
+        const startDate = new Date(inicioDespues);  
+        const endDate = new Date(inicioAntes); 
+        whereClause.updatedAt = {
+            [Op.between]: [startDate, endDate]
+        };
+    } else if (inicioAntes) {
+        whereClause.updatedAt = {
+            [Op.lte]: new Date(inicioAntes)
+        };
+    } else if (inicioDespues) {
+        whereClause.updatedAt = {
+            [Op.gte]: new Date(inicioDespues)
+        };
+    }
+
+    console.log('Where clause:', whereClause);
+
+    const users = await db.User.findAll({
+        where: whereClause
+    });
+
+    console.log('Users found:', users);
+    res.status(200).json({
+        code: 200,
+        message: users
+    });
+};
+
+const validateUser = (user) => {
+    return user.name && user.email && user.password && user.password === user.password_second;
+};
+
+const bulkCreate = async (req, res) => {
+    const usersToCreate = req.body;
+
+    if (!Array.isArray(usersToCreate)) {
+        return({
+            code: 400,
+            message: 'Invalid request format: Expected an array of users.'
+        });
+    }
+
+    let createdUserCount = 0;
+    let failedUserCount = 0;
+    const failedUsers = [];
+
+    for (const user of usersToCreate) {
+        const existingUser = await db.User.findOne({ where: { email: user.email } });
+
+        if (existingUser) {
+            failedUserCount++;
+            failedUsers.push({ email: user.email, reason: 'Usuario ya existente' });
+            continue;
+        }
+
+        if (validateUser(user)) {
+            try {
+                const encryptedPassword = await bcrypt.hash(user.password, 10);
+                await db.User.create({
+                    name: user.name,
+                    email: user.email,
+                    password: encryptedPassword,
+                    cellphone: user.cellphone,
+                    status: true
+                });
+                createdUserCount++;
+            } catch (error) {
+                failedUserCount++;
+                failedUsers.push({ email: user.email, reason: 'Database error' });
+            }
+        } else {
+            failedUserCount++;
+            failedUsers.push({ email: user.email, reason: 'Validacion fallida' });
+        }
+    }
+
+    return res.status(200).json({
+        code: 200,
+        message: `${createdUserCount} Registrados correctamente, ${failedUserCount} No registrados.`,
+        details: { created: createdUserCount, failed: failedUserCount, failedUsers }
+    });
+};
+
 export default {
     createUser,
     getUserById,
     updateUser,
     deleteUser,
+    getAllUsers,
+    findUsers,
+    bulkCreate,
+
 }

@@ -11,7 +11,14 @@ router.post('/create', async (req, res) => {
     res.status(response.code).json(response.message);
 }); 
 
-router.get('/findUsers', UserService.findUsers);
+router.get(
+    '/findUsers',
+    [
+        AuthMiddleware.validateToken,
+        UserMiddleware.hasPermissions
+    ],
+    UserService.findUsers
+);
 
 router.get(
     '/getAllUsers',
@@ -33,7 +40,15 @@ router.get(
         res.status(response.code).json(response.message);
 });
 
-router.post('/bulkCreate', UserService.bulkCreate);
+router.post(
+    '/bulkCreate',
+    [
+        AuthMiddleware.validateToken,
+        UserMiddleware.hasPermissions,
+    ],
+    UserService.bulkCreate
+);
+
 router.get(
     '/:id',
     [

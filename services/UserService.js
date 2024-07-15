@@ -169,7 +169,7 @@ const bulkCreate = async (req, res) => {
     const usersToCreate = req.body;
 
     if (!Array.isArray(usersToCreate)) {
-        return({
+        return res.status(400).json({
             code: 400,
             message: 'Invalid request format: Expected an array of users.'
         });
@@ -180,32 +180,21 @@ const bulkCreate = async (req, res) => {
     const failedUsers = [];
 
     for (const user of usersToCreate) {
-        const existingUser = await db.User.findOne({ where: { email: user.email } });
-
-        if (existingUser) {
-            failedUserCount++;
-            failedUsers.push({ email: user.email, reason: 'Usuario ya existente' });
-            continue;
-        }
-
-        if (validateUser(user)) {
-            try {
-                const encryptedPassword = await bcrypt.hash(user.password, 10);
-                await db.User.create({
-                    name: user.name,
-                    email: user.email,
-                    password: encryptedPassword,
-                    cellphone: user.cellphone,
-                    status: true
-                });
-                createdUserCount++;
-            } catch (error) {
-                failedUserCount++;
-                failedUsers.push({ email: user.email, reason: 'Database error' });
+        const result = await createUser({
+            body: {
+                name: user.name,
+                email: user.email,
+                password: user.password,
+                password_second: user.password_second,
+                cellphone: user.cellphone
             }
+        });
+
+        if (result.code === 200) {
+            createdUserCount++;
         } else {
             failedUserCount++;
-            failedUsers.push({ email: user.email, reason: 'Validacion fallida' });
+            failedUsers.push({ email: user.email, reason: result.message });
         }
     }
 

@@ -15,10 +15,11 @@ router.get(
     '/findUsers',
     [
         AuthMiddleware.validateToken,
-        UserMiddleware.hasPermissions
     ],
-    UserService.findUsers
-);
+    async (req, res) => {
+        const response = await UserService.findUsers(req);
+        res.status(response.code).json(response.message);
+});
 
 router.get(
     '/getAllUsers',

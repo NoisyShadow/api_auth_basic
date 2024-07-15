@@ -120,31 +120,31 @@ const getAllUsers = async () => {
 const findUsers = async (req, res) => {
     console.log('Params received:', req.query);
 
-    const { eliminado, nombre, inicioAntes, inicioDespues } = req.query;
+    const { status, name, login_before_date, login_after_date } = req.query;
     const whereClause = {};
 
-    if (eliminado !== undefined) {
-        whereClause.status = eliminado === 'true';
+    if (status !== undefined) {
+        whereClause.status = status === 'true';
     }
-    if (nombre) {
+    if (name) {
         whereClause.name = {
-            [Op.like]: `%${nombre}%`
+            [Op.like]: `%${name}%`
         };
     }
     
-    if (inicioAntes && inicioDespues) {
-        const startDate = new Date(inicioDespues);  
-        const endDate = new Date(inicioAntes); 
+    if (login_before_date && login_after_date) {
+        const startDate = new Date(login_after_date);  
+        const endDate = new Date(login_before_date); 
         whereClause.updatedAt = {
             [Op.between]: [startDate, endDate]
         };
-    } else if (inicioAntes) {
+    } else if (login_before_date) {
         whereClause.updatedAt = {
-            [Op.lte]: new Date(inicioAntes)
+            [Op.lte]: new Date(login_before_date)
         };
-    } else if (inicioDespues) {
+    } else if (login_after_date) {
         whereClause.updatedAt = {
-            [Op.gte]: new Date(inicioDespues)
+            [Op.gte]: new Date(login_after_date)
         };
     }
 
@@ -155,10 +155,10 @@ const findUsers = async (req, res) => {
     });
 
     console.log('Users found:', users);
-    res.status(200).json({
+    return {
         code: 200,
-        message: users
-    });
+        message: users,
+    };
 };
 
 const validateUser = (user) => {
@@ -180,30 +180,38 @@ const bulkCreate = async (req, res) => {
     const failedUsers = [];
 
     for (const user of usersToCreate) {
-        const result = await createUser({
-            body: {
-                name: user.name,
-                email: user.email,
-                password: user.password,
-                password_second: user.password_second,
-                cellphone: user.cellphone
-            }
-        });
+        try {
+            const result = await createUser({
+                body: {
+                    name: user.name,
+                    email: user.email,
+                    password: user.password,
+                    password_second: user.password_second,
+                    cellphone: user.cellphone
+                }
+            });
 
-        if (result.code === 200) {
-            createdUserCount++;
-        } else {
+            if (result.code === 200) {
+                createdUserCount++;
+            } else {
+                failedUserCount++;
+                failedUsers.push({ email: user.email, reason: result.message });
+            }
+        } catch (error) {
+            console.error(`Error creating user ${user.email}:`, error);
             failedUserCount++;
-            failedUsers.push({ email: user.email, reason: result.message });
+            failedUsers.push({ email: user.email, reason: 'Internal server error' });
         }
     }
 
     return res.status(200).json({
         code: 200,
-        message: `${createdUserCount} Registrados correctamente, ${failedUserCount} No registrados.`,
-        details: { created: createdUserCount, failed: failedUserCount, failedUsers }
+        message: `Proceso de creación de usuarios terminado`,
+        createdUserCount,
+        failedUserCount
     });
 };
+
 
 export default {
     createUser,
